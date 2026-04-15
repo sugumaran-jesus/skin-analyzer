@@ -1,12 +1,12 @@
 from flask import Flask, request, render_template
-import tensorflow as tf
+#import tensorflow as tf
 import numpy as np
 from PIL import Image
 
 app = Flask(__name__)
 
 # Load model
-model = tf.keras.models.load_model("model/skin_model.h5")
+#model = tf.keras.models.load_model("model/skin_model.h5")
 
 classes = ["acne","dry","normal","oily"]
 
