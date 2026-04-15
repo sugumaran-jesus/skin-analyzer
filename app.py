@@ -4,25 +4,51 @@ import numpy as np
 from PIL import Image
 import os
 import gdown
-import traceback
 
 app = Flask(__name__)
+
+# -----------------------------
+# MODEL CONFIG
+# -----------------------------
 MODEL_PATH = "model/skin_model.h5"
 MODEL_URL = "https://drive.google.com/uc?id=1bqwEkTMcJODBNfsUpAsdDDM3PFYaszYY"
 
-# Download model if not exists
+# -----------------------------
+# DOWNLOAD MODEL (SAFE)
+# -----------------------------
+os.makedirs("model", exist_ok=True)
+
 if not os.path.exists(MODEL_PATH):
-    os.makedirs("model", exist_ok=True)
-    gdown.download(MODEL_URL, MODEL_PATH, quiet=False)
+    try:
+        gdown.download(MODEL_URL, MODEL_PATH, quiet=False)
+    except Exception as e:
+        print("Model download failed:", e)
 
-# Load model
-model = tf.keras.models.load_model(MODEL_PATH)
+# -----------------------------
+# LAZY MODEL LOADING (IMPORTANT)
+# -----------------------------
+model = None
 
-classes = ["acne","dry","normal","oily"]
+def load_model():
+    global model
+    if model is None:
+        model = tf.keras.models.load_model(MODEL_PATH)
+    return model
 
-@app.route("/", methods=["GET","POST"])
+# -----------------------------
+# CLASSES
+# -----------------------------
+classes = ["acne", "dry", "normal", "oily"]
+
+# -----------------------------
+# ROUTE
+# -----------------------------
+@app.route("/", methods=["GET", "POST"])
 def index():
     try:
+        result = None
+        suggestion = None
+
         if request.method == "POST":
 
             if "image" not in request.files:
@@ -33,34 +59,76 @@ def index():
             if file.filename == "":
                 return "No file selected"
 
-            img = Image.open(file).convert("RGB").resize((128,128))
-            img = np.array(img)/255.0
-            img = img.reshape(1,128,128,3)
+            # IMAGE PREPROCESSING
+            img = Image.open(file).convert("RGB").resize((128, 128))
+            img = np.array(img) / 255.0
+            img = img.reshape(1, 128, 128, 3)
 
-            prediction = model.predict(img)
+            # LOAD MODEL SAFELY
+            mdl = load_model()
+
+            # PREDICTION
+            prediction = mdl.predict(img)
             result = classes[np.argmax(prediction)]
 
+            # -----------------------------
+            # LONG SUGGESTIONS
+            # -----------------------------
             if result == "dry":
-               suggestion = "Your skin is dry. Use moisturizer and drink water."
+                suggestion = """
+Your skin is dry. It lacks natural oils and moisture, which can cause tightness, flakiness, and irritation.
+
+Recommended care:
+- Use a gentle hydrating cleanser twice daily
+- Apply a rich moisturizer immediately after washing
+- Drink plenty of water throughout the day
+- Avoid hot water and harsh soaps
+- Use products with hyaluronic acid or ceramides
+"""
 
             elif result == "oily":
-                 suggestion = "Your skin is oily. Use oil-free cleanser."
+                suggestion = """
+Your skin is oily, meaning it produces excess sebum that can lead to shine and clogged pores.
+
+Recommended care:
+- Wash your face twice daily with oil-free cleanser
+- Use non-comedogenic skincare products
+- Avoid heavy creams and greasy foods
+- Use gel-based lightweight moisturizers
+- Consider salicylic acid for oil control
+"""
 
             elif result == "acne":
-                 suggestion = "You have acne. Use gentle cleanser and avoid touching face."
+                suggestion = """
+Your skin shows signs of acne caused by clogged pores, bacteria, or excess oil production.
+
+Recommended care:
+- Clean your face gently twice daily
+- Avoid touching or squeezing pimples
+- Use products with salicylic acid or benzoyl peroxide
+- Keep pillow covers and towels clean
+- Maintain a healthy diet and hydration
+"""
 
             else:
-                 suggestion = "Your skin is normal. Maintain simple skincare routine."
+                suggestion = """
+Your skin is normal and well-balanced.
 
-        return f"Skin: {result} | Suggestion: {suggestion}"
+Recommended care:
+- Maintain a simple skincare routine
+- Cleanse and moisturize daily
+- Use sunscreen for protection
+- Stay hydrated and eat healthy
+- Avoid overusing skincare products
+"""
 
-        return render_template("index.html")
+        return render_template("index.html", result=result, suggestion=suggestion)
 
     except Exception as e:
-        print("ERROR OCCURRED:")
-        print(traceback.format_exc())
         return f"Server Error: {str(e)}"
 
-
+# -----------------------------
+# RUN APP (LOCAL ONLY)
+# -----------------------------
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=10000)
