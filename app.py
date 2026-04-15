@@ -4,6 +4,7 @@ import numpy as np
 from PIL import Image
 import os
 import gdown
+import traceback
 
 app = Flask(__name__)
 MODEL_PATH = "model/skin_model.h5"
